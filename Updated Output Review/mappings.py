@@ -85,7 +85,7 @@ ccn_dict = {
         "Invoice Already Charge Corrected - ":{
             "DP Status":"P00 Error","DP Comments":"P00 - Already Corrected","DP Category":"Timing Issue","Action":"No Action Needed",},
         "Invoice has different PCD values - ":{
-            "DP Status":"P00 Error","DP Comments":"P00 - Paycode Mismatch","DP Category":"Bot Error","Action":"Rep to complete manually",},
+            "DP Status":"P00 Error","DP Comments":"P00 - Paycode Mismatch","DP Category":"Rep Error","Action":"Rep to complete manually",},
         "Completed - ":{
             "DP Status":"Success","DP Comments":" ","DP Category":"Success","Action":" ",},
         "Encounter Already Worked - ":{
@@ -135,7 +135,7 @@ ccn_dict = {
         "New/Unexpected Screen Element - Frequency Type Field":{
             "DP Status":"Error","DP Comments":"","DP Category":"","Action":"",},
         "Invalid Input - Invoice has multiple PCD values":{
-            "DP Status":"P00 Error","DP Comments":"P00 - Paycode Mismatch","DP Category":"Bot Error","Action":"Rep to complete manually",},
+            "DP Status":"P00 Error","DP Comments":"P00 - Paycode Mismatch","DP Category":"Rep Error","Action":"Rep to complete manually",},
         "Known Pop Up - Batch out of Balance":{
             "DP Status":"Error","DP Comments":"Out of Balance Batch","DP Category":"Bot Error","Action":"Rep to complete manually",},
         "Unable to Click Hyperlink - Charge Corrected":{
