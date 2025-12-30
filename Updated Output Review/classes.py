@@ -11,6 +11,7 @@ from pathlib import Path
 from glob import glob
 import os
 import re
+import numpy as np
 
 
 class Output_Review():
@@ -25,6 +26,10 @@ class Output_Review():
         self.sutherland_output_fp = mappings.ccn_dict["sutherland_output_fp"]
         self.rep_submission_fp = mappings.ccn_dict["rep_submission_file_fp"] 
         self.cleanup_dir = Path('//NT2KWB972SRV03/SHAREDATA/CPP-Data/Sutherland RPA/ChargeCorrection')
+        self.BOT_REP_NAME_LIST = [
+                'HCOB 16',
+                # 'MBProject',
+            ]
         
 
     def prep_and_export_file(self):
@@ -52,6 +57,29 @@ class Output_Review():
         self.df_sutherland_exp['DP Category'] = self.df_sutherland_exp.apply(lambda row: self.get_crosswalk_values(row, sub_cat='DP Category'), axis=1)
         logger.info('populating action column')
         self.df_sutherland_exp['Action'] = self.df_sutherland_exp.apply(lambda row: self.get_crosswalk_values(row, sub_cat='Action'), axis=1)
+        self.change_df_val_list_based(self.df_sutherland_exp, 'Action', 'Rep Name', self.BOT_REP_NAME_LIST)
+
+    # function to change df_sutherland_exp['Action'] to 'No Action Needed' if rep name is in BOT_REP_NAME_LIST
+    def change_df_val_list_based(self,  df: object, col1: str, col2: str, list: list):
+        df[col1] = np.where(
+            df[col2].isin(list), 
+            'No Action Needed', 
+            df[col1]
+        )
+
+        # self.function(
+        #     list= BOT_REP_NAME_LIST,
+        #     df_val= self.df_sutherland_exp['Rep Name'],
+        #     df= self.df_formatted_exp,
+        #     col= 'Action', 
+        # )
+        # def function(self, list: list, df_val, df, col: str):
+        #     if df_val in list:
+        #         df[col] = 'No Action Needed'
+
+        
+                
+
 
     def get_crosswalk_values(self, row, sub_cat):
         rd_reason_entry = self.rd_reason_crosswalk.get(row['RD + Reason'])
@@ -232,9 +260,22 @@ class Email_Prep(Output_Review):
 
         # get todays date
         today = dt.datetime.now()
-        # if date in the file is more than 5 days old, delete the file date
+        # if date in the file is more than 4 days old, delete the file date
         for file, date in zip(files, file_dates):
-            if (today - date).days > 5:
+            if (today - date).days > 4:
                 os.remove(file)
             else:
-                continue        
+                continue   
+
+    def rename_output_file(self):
+        # Northwell_ChargeCorrection_Output_{mmddyyyy}
+        old_file_name = f'//NT2KWB972SRV03/SHAREDATA/CPP-Data/Sutherland RPA/ChargeCorrection/{self.file_year}/{self.fd_mm_yyyy}/{self.fd_mmddyyyy}/DP Comments Template.xlsx'
+        new_file_name = f'//NT2KWB972SRV03/SHAREDATA/CPP-Data/Sutherland RPA/ChargeCorrection/{self.file_year}/{self.fd_mm_yyyy}/{self.fd_mmddyyyy}/DP Comments Northwell_ChargeCorrection_Output_{self.fd_mmddyyyy}.xlsx'
+        try:
+            # Rename the file
+            os.rename(old_file_name, new_file_name)
+            logger.info(f"File '{old_file_name}' successfully renamed to '{new_file_name}'.")
+        except FileNotFoundError:
+            logger.error(f"Error: The file '{old_file_name}' was not found.")
+        except OSError as e:
+            logger.error(f"Error renaming file: {e}")

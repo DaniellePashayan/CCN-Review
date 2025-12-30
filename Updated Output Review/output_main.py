@@ -33,6 +33,7 @@ if __name__ == '__main__':
             email_prep.prep_email_list()
             email_prep.create_email()
             email_prep.cleanup_directory()
+            email_prep.rename_output_file()
         elif output_process == None:
             mb.showinfo("Closing", "Thank you, exiting program")
             logger.info("user ending program")
