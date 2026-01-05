@@ -17,14 +17,14 @@ OUT_PATH = 'M:/CPP-Data/Sutherland RPA/ChargeCorrection'
 ARS_FILE_PATH = "M:/CPP-Data/AR SUPPORT/SPECIAL PROJECTS/CHARGE CORRECTION BOT/SPREADSHEETS TO SEND TO BOT"
 P1_FILE_PATH = "M:/CPP-Data/Payor 1/Bot CCN"
 P2_FILE_PATH = "M:/CPP-Data/Payer 2/BOTS/Charge Correction Files"
-REP_SUPE_CROSSWALK = "M:/CPP-Data/Sutherland RPA/Northwell Process Automation ETM Files/Monthly Reports/Charge Correction/References/Report To.xlsx"
+REP_SUPE_CROSSWALK = "M:/CPP-Data/Sutherland RPA/Northwell Process Automation ETM Files/Monthly Reports/Charge Correction/References/Report To2.xlsx"
 INPUTS_PATH = "M:/CPP-Data/Sutherland RPA/Northwell Process Automation ETM Files/Monthly Reports/Charge Correction/Inputs"
 FSC_GRID = 'M:/CPP-Data/Sutherland RPA/Northwell Process Automation ETM Files/Monthly Reports/Charge Correction/References/FSCs that accept electronic CCL.xlsx'
 
 class Date_Functions:
     def __init__(self) -> None:
-        self.today = date.today()
-        # self.today = date(2024, 12, 24)
+        self.today = date.today() # File date is always dated t+1 or t+3 in case of friday
+        # self.today = date(2025, 12, 28) # set for specific date. ensure it is 1 day before the desired file date
 
     def run(self):
         self.get_file_date()
@@ -393,6 +393,7 @@ class Input_Review(Date_Functions):
         self.find_max_pointer_value()
         self.review_dx_pointers()
         self.evaluate_dx_pointers()
+        self.clear_nas()
         self.invalid_bie()
         self.add_rep_supe()
         self.value_exclude_col()
@@ -480,11 +481,12 @@ class Input_Review(Date_Functions):
         logger.debug(f'Length of Review DataFrame: {len(self.review_df)}')
 
     def fsc_review(self):
+        self.review_df['FSC Review'] = ''
         logger.info("Reviewing FSCs")
-        self.review_df['FSC REVIEW'] = np.where(
+        self.review_df['FSC Review'] = np.where(
             self.initial_sub_df['Insurance'].isin(self.fsc_values), 
             '', 
-            'FSC not in grid'
+            'FSC Review'
             )
         
     def update_inv_bal(self):
@@ -523,28 +525,39 @@ class Input_Review(Date_Functions):
 
     def exclude_multi_paycode(self):
         logger.info("Excluding Multi Paycode Invoices")
-        self.review_df['Exclude Multi Paycode'] = np.where(
+        self.review_df['Exclude Type'] = ''
+        # 'Exclude Multi Paycode'
+        self.review_df['Exclude Type'] = np.where(
             (self.review_df['unique_paycode_count'] > 1) &
             (self.review_df['STEP'] != 2),
-            "Exclude",
-            ""
+            "Multi Paycode Exclude",
+            self.review_df['Exclude Type']
         )
     
     def exclude_dos_over_one_year(self):
         logger.info("Excluding DOS over One Year")
-        self.review_df['Exclude DOS > 1 Year'] = np.where(
+        # 'Exclude DOS > 1 Year'
+        self.review_df['Exclude Type'] = np.where(
             (self.review_df['BAR_B_INV.SER_DT,'] <= self.one_year_ago),
-            "Exclude",
-            ""
+            "DOS > 1 Year Exclude",
+            self.review_df['Exclude Type']
         )
 
     def review_mod(self):
         logger.info("Identifying modifiers that need to be reviewed")
+        # self.review_df['OriginalModifier'] = np.where(
+        #     (self.review_df['OriginalModifier'].notnull()) &
+        #     (self.review_df['OriginalModifier'].str.contains('|'))
+        #     (self.review_df['NewModifier'].isnull()),
+        #     "",
+        #     self.review_df['OriginalModifier']
+        # )
+        # 'Modifier Review'
         self.review_df['Modifier Review'] = np.where(
             (self.review_df['OriginalModifier'].notnull()) &
             (self.review_df['NewModifier'].isnull()),
-            "Review",
-            ""
+            "Modifier Review",
+            ''
         )
 
     def review_orig_cpt(self):
@@ -561,17 +574,21 @@ class Input_Review(Date_Functions):
     
     def is_orig_blank(self, new_field, orig_field):
         self.review_df[f'{new_field}'] = np.where(
-            (self.review_df[f'{orig_field}'] == ""),
+            (self.review_df[f'{orig_field}'] == "")|
+            (self.review_df[f'{orig_field}'].empty),
             "",
             self.review_df[f'{new_field}']
         )
 
     def is_orig_eq_new(self, orig_field, new_field):
-        self.review_df[f'{orig_field}'] = np.where(
-            (self.review_df[f'{orig_field}'] == self.review_df[f'{new_field}']),
-            "",
-            self.review_df[f'{orig_field}']
-        )
+        try:
+            self.review_df[f'{orig_field}'] = np.where(
+                (self.review_df[f'{orig_field}'] == self.review_df[f'{new_field}']),
+                "",
+                self.review_df[f'{orig_field}']
+            )
+        except TypeError as e:
+            logger.error(f"Encountered a TypeError \n {e}")
 
     def clear_date_field(self):
         self.review_df['OriginalDOS'] = np.where(
@@ -637,6 +654,7 @@ class Input_Review(Date_Functions):
         # 1) Orig Count > New Count & DxPointers String == True
         # 2) Orig Count != New Count & Max Pointer == 0
         # 3) Max Pointer > New Count & Orig Count != 0 & New Count != 0
+        # 'DxPointer Review'
         self.review_df['DxPointer Review'] = np.where(
         (
             (self.review_df['Original DX Count'] > self.review_df['New DX Count']) & 
@@ -651,25 +669,18 @@ class Input_Review(Date_Functions):
             (self.review_df['Original DX Count'] != 0) & 
             (self.review_df['New DX Count'] != 0)
         ),
-        'Review',
+        'DX Pointer Review',
         '')
 
     def invalid_bie(self):
         logger.info("Evaluating for Invalid BIE")
         # Create a new column 'Invalid BIE' that looks at the 'OriginalCPT' column for a string containing '|'. If there is no "|" then review the 'NewCPT' column and if there is a null value, evaluate to 'Exclude'
-        self.review_df['Invalid BIE'] = np.where(
+        # 'Invalid BIE'
+        self.review_df['Exclude Type'] = np.where(
             (self.review_df['OriginalCPT'].apply(lambda x: '|' not in str(x))) &
             (self.review_df['OriginalCPT'].isnull() == False) &
             (self.review_df['NewCPT'].isnull() == True),
-            'Exclude',
-            ''
-        )
-
-    def review_FSC(self):
-        logger.info
-        self.review_df['Review FSC'] = np.where(
-            self.review_df['Insurance'] != self.review_df['BAR_B_INV.ORIG_FSC__5,'],
-            'Review',
+            'Invalid BIE Exclude',
             ''
         )
 
@@ -685,34 +696,43 @@ class Input_Review(Date_Functions):
         self.review_df['OriginalCPT List'] = self.review_df['OriginalCPT'].apply(lambda x: x.split('|') if '|' in x else [x])
         self.review_df['QueryCPT'] = self.review_df['QueryCPT'].apply(lambda x: x.split('|') if '|' in x else [x])
 
-        self.review_df['Review CPT'] = ''
+        self.review_df['CPT Review'] = ''
 
         for index, row in self.review_df.iterrows():
             query_list = row['QueryCPT']
             orig_list = row['OriginalCPT List']
 
             if len(query_list) != len(orig_list):
-                self.review_df.at[index, 'Review CPT'] = 'Count Mismatch'
+                self.review_df.at[index, 'CPT Review'] = 'CPT Count Mismatch'
                 continue
 
             for i, o in enumerate(orig_list):
                 q = query_list[i]
                 if o and o != q:
-                    self.review_df.at[index, 'Review CPT'] = 'Comparison Error'
+                    self.review_df.at[index, 'CPT Review'] = 'CPT Comparison Error'
                     break
 
         
 
     def value_exclude_col(self):
         logger.info("Valuing Exclude Column")
-        self.review_df['Exclude'] = np.where(
-            (self.review_df['Exclude Multi Paycode'] == 'Exclude') | 
-            (self.review_df['Exclude DOS > 1 Year'] == 'Exclude') |
-            (self.review_df['Invalid BIE'] == 'Exclude') |
-            (self.review_df['BAR_B_INV.CORR_INV_NUM'] >= 1),
-            'Exclude',
-            ''
+        self.review_df['Exclude Type'] = np.where(
+            (self.review_df['BAR_B_INV.CORR_INV_NUM'] != ''),
+            'Inv Already Corrected Exclude',
+            self.review_df['Exclude Type']
         )
+        # self.review_df['Exclude'] = np.where(
+        #     (self.review_df['Exclude Type'].notna()) |
+        #     (self.review_df['BAR_B_INV.CORR_INV_NUM'] != ''),
+        #     'Exclude',
+        #     ''
+        # )
+        # self.review_df['Exclude'] = np.where(
+        #     (self.review_df['Exclude Type'].notna()),
+        #     'Exclude',
+        #     ''
+        # )
+
         for index, row in self.review_df.iterrows():
             if row['Rep Name'] == 'HCOB16Electronic':
                 self.review_df.at[index, 'Exclude'] = ''
@@ -743,6 +763,7 @@ class Input_Review(Date_Functions):
             "OriginalLocation",
             "NewLocation",
             "Insurance",
+            "FSC Review",
             "TXN",
             "OriginalCPT",
             "NewCPT",
@@ -751,6 +772,7 @@ class Input_Review(Date_Functions):
             "DxPointers",
             "OriginalModifier",
             "NewModifier",
+            "Modifier Review",
             "ActionAddRemoveReplace",
             "Reason",
             "STEP",
@@ -760,21 +782,14 @@ class Input_Review(Date_Functions):
             "BAR_B_INV.SER_DT,",
             "BAR_B_INV.TOT_CHG,",
             "INV_BAL,",
-            "BAR_B_INV.ORIG_FSC__5,",
-            "FSC REVIEW",
             "QueryCPT",
             "OriginalCPT List",
-            "Review CPT",
-            "BAR_B_INV.CORR_INV_NUM",
-            "unique_paycode_count",
-            "Exclude Multi Paycode",
-            "Exclude DOS > 1 Year",
-            "Invalid BIE",
-            "Modifier Review",
+            "CPT Review",
             "DxPointer Review",
             "Original DX Count",
             "New DX Count",
             "Max Pointer",
+            "Exclude Type",
             "Exclude",
             "Rep Name",
             "Report to",
@@ -782,6 +797,10 @@ class Input_Review(Date_Functions):
         # set the column order of self.review_df to col_order
         self.review_df = self.review_df[col_order]
 
+    def clear_nas(self):
+        logger.info("Clearing NAs")
+        self.review_df = self.review_df.replace('nan',np.nan)
+        self.review_df.fillna('', inplace=True)
 
     def add_rep_supe(self):
         logger.info("Adding Rep and Supervisor Columns")
@@ -805,7 +824,7 @@ class Input_Review(Date_Functions):
             elif 'MBProject' in row['Rep Name']:
                 continue
             else:
-                if row['Exclude Multi Paycode'] == 'Exclude':
+                if row['Exclude Type'] == 'Multi Paycode Exclude':
                     logger.debug('Multi Paycode')
                     self.create_email(
                         body=f"""
@@ -831,7 +850,7 @@ class Input_Review(Date_Functions):
                         rep=[row['Rep Name']],
                         supe=[row['Report to']]
                     )
-                elif row['Exclude DOS > 1 Year'] == 'Exclude':
+                elif row['Exclude Type'] == 'DOS > 1 Year Exclude':
                     logger.debug('DOS > 1 year')
                     self.create_email(
                         body=f"""
@@ -856,7 +875,7 @@ class Input_Review(Date_Functions):
                         rep=[row['Rep Name']],
                         supe=[row['Report to']]
                     )
-                elif row['Invalid BIE'] == 'Exclude':
+                elif row['Exclude Type'] == 'Invalid BIE Exclude':
                     logger.debug('Invalid BIE')
                     self.create_email(
                         body=f"""
@@ -880,7 +899,7 @@ class Input_Review(Date_Functions):
                         rep=[row['Rep Name']], 
                         supe=[row['Report to']]
                     )
-                elif row['BAR_B_INV.CORR_INV_NUM'] != '':
+                elif row['Exclude Type'] != 'Inv Already Corrected Exclude':
                     logger.debug('Inv already CCN')
                     self.create_email(
                         body=f"""
@@ -928,20 +947,18 @@ class File_To_CSV:
             "BAR_B_INV.TOT_CHG,",
             "INV_BAL,",
             "BAR_B_INV.ORIG_FSC__5,",
-            "FSC REVIEW",
+            "FSC Review",
             "QueryCPT",
             "OriginalCPT List",
-            "Review CPT",
+            "CPT Review",
             "BAR_B_INV.CORR_INV_NUM",
             "unique_paycode_count",
-            "Exclude Multi Paycode",
-            "Exclude DOS > 1 Year",
-            "Invalid BIE",
             "Modifier Review",
             "DxPointer Review",
             "Original DX Count",
             "New DX Count",
             "Max Pointer",
+            "Exclude Type",
             "Exclude",
             "Rep Name",
             "Report to",
@@ -966,5 +983,14 @@ class File_To_CSV:
     
     def to_csv(self, df):
         logger.info(f"Saving csv to {OUT_PATH}")
-        df.to_csv(f'{OUT_PATH}/{self.file_csv}', index=False)
+        csv_fp = Path(f'{OUT_PATH}/{self.file_csv}')
+        try:
+            df.to_csv(f'{OUT_PATH}/{self.file_csv}', index=False)
+        except Exception as e:
+            logger.error(e)    
+        if not csv_fp.exists():
+            logger.error('CSV did not create. Please double check')
+            mb.showerror(title='CSV Save Error', message='Review process as CSV did not Save')
+        else:
+            logger.info('CSV successfully saved to directory')
         

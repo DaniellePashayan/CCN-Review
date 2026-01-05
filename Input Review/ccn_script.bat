@@ -7,4 +7,3 @@ python -u "%SCRIPT_PATH%"
 ENDLOCAL
 
 @Echo Process Completed
-pause
