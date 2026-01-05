@@ -951,8 +951,6 @@ class File_To_CSV:
             "QueryCPT",
             "OriginalCPT List",
             "CPT Review",
-            "BAR_B_INV.CORR_INV_NUM",
-            "unique_paycode_count",
             "Modifier Review",
             "DxPointer Review",
             "Original DX Count",
