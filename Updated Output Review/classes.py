@@ -47,6 +47,7 @@ class Output_Review():
             self.df_sutherland_exp = pd.merge(self.df_sutherland_exp, self.df_rep_submission[['INVNUM', 'Rep Username', 'Rep Name','Supervisor','Department']],on='INVNUM',how='left')
         except ValueError:
             logger.error(f"Error merging DataFrames, likely due to an invald row in Northwell_ChargeCorrection_Output_{self.fd_mmddyyyy}.xls")
+        self.change_df_val_list_based(self.df_sutherland_exp, 'Action', 'Rep Name', self.BOT_REP_NAME_LIST)
 
     def populate_stat_comm_cat_act(self):
         logger.info('populating dp status column')
@@ -57,7 +58,7 @@ class Output_Review():
         self.df_sutherland_exp['DP Category'] = self.df_sutherland_exp.apply(lambda row: self.get_crosswalk_values(row, sub_cat='DP Category'), axis=1)
         logger.info('populating action column')
         self.df_sutherland_exp['Action'] = self.df_sutherland_exp.apply(lambda row: self.get_crosswalk_values(row, sub_cat='Action'), axis=1)
-        self.change_df_val_list_based(self.df_sutherland_exp, 'Action', 'Rep Name', self.BOT_REP_NAME_LIST)
+        
 
     # function to change df_sutherland_exp['Action'] to 'No Action Needed' if rep name is in BOT_REP_NAME_LIST
     def change_df_val_list_based(self,  df: object, col1: str, col2: str, list: list):
